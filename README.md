@@ -1,8 +1,14 @@
 # AI Research Agent
 
+[![CI](https://github.com/parikhrjt/ai-research-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/parikhrjt/ai-research-agent/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 A production-grade Retrieval-Augmented Generation (RAG) system that ingests heterogeneous research documents, indexes them in a vector database, and answers questions with inline citations.
 
 Built as a portfolio project demonstrating end-to-end AI engineering: document parsing, intelligent chunking, local embeddings, vector search, LangGraph orchestration, and a dual FastAPI + Streamlit interface.
+
+> **Live demo:** Deploy the API on [Render](#deploy-api-on-render) or [Railway](#deploy-api-on-railway), then host the UI on [Streamlit Cloud](#deploy-ui-on-streamlit-cloud). See the [Demo walkthrough](#demo) below.
 
 ---
 
@@ -33,7 +39,8 @@ This agent solves that by:
 | **API** | FastAPI with `/health`, `/upload`, `/ask`, `/documents` |
 | **UI** | Streamlit frontend for upload + Q&A |
 | **Observability** | Structured logging (structlog), health checks, error hierarchy |
-| **Deployment** | Docker Compose with PostgreSQL, Ollama, API, and UI services |
+| **Deployment** | Docker Compose · Render · Railway · Streamlit Cloud |
+| **CI** | GitHub Actions — pytest on every push |
 
 ---
 
@@ -108,10 +115,168 @@ ai-research-agent/
 ├── scripts/              # PDF generator and seed utility
 ├── tests/                # Unit tests (pytest)
 ├── docker-compose.yml
+├── render.yaml           # Render Blueprint (one-click API deploy)
+├── railway.toml          # Railway config
+├── streamlit_app.py      # Streamlit Cloud entry point
 ├── Dockerfile
 ├── requirements.txt
 └── .env.example
 ```
+
+---
+
+## Demo
+
+Try the API in under 2 minutes — locally or against your deployed URL.
+
+```bash
+# Set your API base (local or cloud)
+export API_URL=http://localhost:8000
+# export API_URL=https://ai-research-api.onrender.com
+```
+
+### Step 1 — Health check
+
+```bash
+curl -s "$API_URL/health" | python3 -m json.tool
+```
+
+Expected: `"status": "healthy"` or `"degraded"` (degraded is fine if Ollama isn't running locally).
+
+### Step 2 — Upload a sample document
+
+```bash
+curl -s -X POST "$API_URL/upload" \
+  -F "file=@data/samples/transformer_architecture.md" | python3 -m json.tool
+```
+
+Expected response:
+
+```json
+{
+  "document_id": "abc123...",
+  "filename": "transformer_architecture.md",
+  "file_type": "md",
+  "chunk_count": 8,
+  "char_count": 2303,
+  "message": "Document ingested successfully"
+}
+```
+
+### Step 3 — List indexed documents
+
+```bash
+curl -s "$API_URL/documents" | python3 -m json.tool
+```
+
+### Step 4 — Ask a question with citations
+
+```bash
+curl -s -X POST "$API_URL/ask" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What BLEU score did the Transformer achieve on English-to-German translation?"}' \
+  | python3 -m json.tool
+```
+
+Expected: an answer with inline `[1]` citations and a `citations` array with filename, excerpt, and relevance score.
+
+### Step 5 — Upload more formats
+
+```bash
+# Plain text notes
+curl -s -X POST "$API_URL/upload" -F "file=@data/samples/rag_pipeline_notes.txt"
+
+# CSV experiment data
+curl -s -X POST "$API_URL/upload" -F "file=@data/samples/experiment_results.csv"
+
+# PDF research brief
+curl -s -X POST "$API_URL/upload" -F "file=@data/samples/research_brief.pdf"
+```
+
+### Sample questions
+
+| Question | Expected source |
+|---|---|
+| "What BLEU score did the Transformer achieve?" | `transformer_architecture.md` |
+| "What chunking strategies are used for CSV files?" | `rag_pipeline_notes.txt` |
+| "What was the RAG answer relevance score for EXP-005?" | `experiment_results.csv` |
+| "What are the key findings about RAG systems?" | `research_brief.pdf` |
+
+### One-liner smoke test
+
+```bash
+API_URL=http://localhost:8000 \
+  curl -sf "$API_URL/health" && \
+  curl -sf -X POST "$API_URL/upload" -F "file=@data/samples/transformer_architecture.md" && \
+  curl -sf -X POST "$API_URL/ask" -H "Content-Type: application/json" \
+    -d '{"question": "What is self-attention?"}' && \
+  echo "✓ All endpoints OK"
+```
+
+---
+
+## Cloud Deployment
+
+Cloud deployments use **ChromaDB** (no PostgreSQL setup) and **OpenAI** for answer generation (Ollama isn't available on Render/Railway free tiers). Embeddings still run locally via sentence-transformers.
+
+> **Note:** Free-tier disks are ephemeral — uploaded documents reset on redeploy. Fine for demos; use persistent storage for production.
+
+### Deploy API on Render
+
+1. Fork/clone this repo to your GitHub account
+2. Go to [render.com](https://render.com) → **New** → **Blueprint** → connect `parikhrjt/ai-research-agent`
+3. Render detects `render.yaml` automatically
+4. Add **`OPENAI_API_KEY`** in the Render dashboard when prompted
+5. Deploy — your API will be at `https://ai-research-api.onrender.com` (or similar)
+
+Manual deploy (without Blueprint):
+
+| Setting | Value |
+|---|---|
+| **Runtime** | Python 3 |
+| **Build command** | `pip install -r requirements.txt` |
+| **Start command** | `sh scripts/start_api.sh` |
+| **Health check** | `/health` |
+
+Environment variables — see [`.env.cloud.example`](.env.cloud.example).
+
+### Deploy API on Railway
+
+1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
+2. Select `parikhrjt/ai-research-agent`
+3. Railway reads `railway.toml` automatically
+4. Add environment variable: **`OPENAI_API_KEY`** = your key
+5. Generate a public domain under **Settings → Networking**
+6. Copy the URL (e.g. `https://ai-research-agent-production.up.railway.app`)
+
+### Deploy UI on Streamlit Cloud
+
+1. Go to [share.streamlit.io](https://share.streamlit.io) → **New app**
+2. Connect GitHub repo `parikhrjt/ai-research-agent`
+3. Configure:
+
+| Setting | Value |
+|---|---|
+| **Branch** | `main` |
+| **Main file path** | `streamlit_app.py` |
+| **App URL** | `ai-research-agent` (or your choice) |
+
+4. Under **Advanced settings → Secrets**, add:
+
+```toml
+API_BASE_URL = "https://your-api-url.onrender.com"
+```
+
+Replace with your Render or Railway API URL from the steps above.
+
+5. Click **Deploy** — UI will be at `https://ai-research-agent.streamlit.app`
+
+### Post-deploy checklist
+
+- [ ] API `/health` returns 200
+- [ ] Upload a sample doc via Streamlit or `curl`
+- [ ] Ask a question and verify citations appear
+- [ ] Add live URLs to your GitHub repo **About** section and resume
 
 ---
 
@@ -259,19 +424,6 @@ curl http://localhost:8000/documents
 
 ---
 
-## Demo Examples
-
-After seeding sample documents, try these questions in the Streamlit **Ask** tab or via `/ask`:
-
-| Question | Expected Source |
-|---|---|
-| "What BLEU score did the Transformer achieve?" | `transformer_architecture.md` |
-| "What chunking strategies are used for CSV files?" | `rag_pipeline_notes.txt` |
-| "What was the RAG answer relevance score for EXP-005?" | `experiment_results.csv` |
-| "What are the key findings about RAG systems?" | `research_brief.pdf` |
-
----
-
 ## Configuration
 
 All settings are managed via environment variables (see `.env.example`):
@@ -292,11 +444,13 @@ All settings are managed via environment variables (see `.env.example`):
 
 ```bash
 # Run all tests (uses ChromaDB in /tmp, no external services)
-pytest tests/ -v
+PYTHONPATH=. pytest tests/ -v
 
 # With coverage
-pytest tests/ --cov=app --cov-report=term-missing
+PYTHONPATH=. pytest tests/ --cov=app --cov-report=term-missing
 ```
+
+CI runs automatically on every push to `main` via [GitHub Actions](.github/workflows/ci.yml).
 
 ---
 

@@ -1,0 +1,29 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy: connect repo → Render auto-detects this file → add OPENAI_API_KEY in dashboard
+
+services:
+  - type: web
+    name: ai-research-api
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: sh scripts/start_api.sh
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: PYTHONPATH
+        value: .
+      - key: VECTOR_STORE
+        value: chroma
+      - key: CHROMA_PERSIST_DIR
+        value: ./data/chroma
+      - key: LLM_PROVIDER
+        value: openai
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: APP_ENV
+        value: production

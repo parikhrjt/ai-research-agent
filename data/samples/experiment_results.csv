@@ -1,0 +1,15 @@
+experiment_id,model,dataset,metric,score,split,notes
+EXP-001,bert-base,squad-v2,exact_match,83.2,test,baseline encoder model
+EXP-002,bert-large,squad-v2,exact_match,86.1,test,larger encoder
+EXP-003,llama3.2-3b,squad-v2,exact_match,78.5,test,local LLM zero-shot
+EXP-004,gpt-4o-mini,squad-v2,exact_match,89.7,test,API model reference
+EXP-001,bert-base,squad-v2,f1,86.4,test,baseline encoder model
+EXP-002,bert-large,squad-v2,f1,88.9,test,larger encoder
+EXP-003,llama3.2-3b,squad-v2,f1,81.2,test,local LLM zero-shot
+EXP-004,gpt-4o-mini,squad-v2,f1,92.1,test,API model reference
+EXP-005,rag-bert-mini,internal-docs,answer_relevance,0.87,eval,RAG with MiniLM embeddings
+EXP-006,rag-bert-mini,internal-docs,faithfulness,0.91,eval,RAG citation accuracy
+EXP-007,rag-bert-mini,internal-docs,context_precision,0.84,eval,retrieval precision@5
+EXP-008,rag-bert-mini,internal-docs,latency_p95_ms,1240,eval,end-to-end p95 latency
+EXP-009,hybrid-bm25-dense,internal-docs,context_precision,0.89,eval,hybrid retrieval prototype
+EXP-010,cross-encoder-rerank,internal-docs,context_precision,0.93,eval,reranked top-20 to top-5

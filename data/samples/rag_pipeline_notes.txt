@@ -1,0 +1,90 @@
+RAG Pipeline Design Notes
+==========================
+
+Author: ML Platform Team
+Last Updated: 2024-06-01
+
+1. PROBLEM STATEMENT
+--------------------
+Enterprise research teams accumulate documents across PDFs, wikis, meeting notes,
+and CSV exports. Finding specific information requires manual search across
+disparate sources. A RAG (Retrieval-Augmented Generation) system indexes these
+documents into a vector database and generates grounded answers with citations.
+
+2. INGESTION PIPELINE
+---------------------
+The ingestion pipeline handles heterogeneous document formats:
+
+  a) PDF — extracted via pypdf with per-page markers
+  b) Markdown — front-matter stripped, header-aware chunking
+  c) Plain text — direct UTF-8 read
+  d) CSV — rows converted to narrative "key: value" pairs
+
+Each document receives a UUID, SHA-256 content hash, and ingestion timestamp
+for deduplication and audit trails.
+
+3. CHUNKING STRATEGY
+--------------------
+Format-aware chunking improves retrieval quality:
+
+  - Markdown: split on headers (# through ####) then recursive character split
+  - CSV: batch rows (5+ per chunk) to preserve tabular context
+  - PDF/Text: recursive split with 800-char chunks, 150-char overlap
+
+Separators priority: paragraph breaks > line breaks > sentences > words.
+
+4. EMBEDDING MODEL
+------------------
+Default: sentence-transformers/all-MiniLM-L6-v2
+  - Dimensions: 384
+  - Speed: ~14,000 sentences/sec on CPU
+  - Quality: strong baseline for semantic search
+  - Cost: free, runs locally, no API key required
+
+5. VECTOR STORE OPTIONS
+-----------------------
+  a) PostgreSQL + pgvector — production-grade, ACID, SQL analytics
+  b) ChromaDB — lightweight local alternative, zero-config persistence
+
+Both use cosine similarity for retrieval. pgvector uses IVFFlat indexing
+for approximate nearest neighbor search at scale.
+
+6. RETRIEVAL CONFIGURATION
+--------------------------
+  - Top-K: 5 chunks per query
+  - Score threshold: 0.3 (filters low-relevance results)
+  - Query embedding: same model as document embeddings
+
+7. GENERATION
+-------------
+LangGraph orchestrates a two-node pipeline:
+  Node 1 (retrieve): embed query → similarity search → build context
+  Node 2 (generate): LLM with system prompt enforcing citation format
+
+LLM options:
+  - Ollama (default): llama3.2 running locally
+  - OpenAI (optional): gpt-4o-mini via API key
+
+8. CITATION FORMAT
+------------------
+Sources are numbered [1], [2], etc. in the context block. The LLM cites inline
+using matching numbers. Post-generation, only referenced citations are returned
+to the client.
+
+9. DEPLOYMENT
+-------------
+Docker Compose stack:
+  - api: FastAPI on port 8000
+  - ui: Streamlit on port 8501
+  - db: PostgreSQL 16 with pgvector on port 5432
+  - ollama: local LLM inference on port 11434
+
+Health endpoint reports component status for observability.
+
+10. FUTURE WORK
+---------------
+  - Hybrid search (BM25 + dense retrieval)
+  - Re-ranking with cross-encoder models
+  - Multi-tenant document isolation
+  - Async ingestion queue (Celery/Redis)
+  - Evaluation harness with RAGAS metrics
